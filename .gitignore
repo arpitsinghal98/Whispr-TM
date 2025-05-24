@@ -1,0 +1,6 @@
+node_modules
+
+/.cache
+/build
+.env
+whispr-firebase-firebase-adminsdk-fbsvc-09eaf792d0.json
