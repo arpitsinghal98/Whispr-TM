@@ -19,6 +19,11 @@ export default function CalendarView({ onEventClick }: CalendarViewProps) {
     end: endOfMonth(currentDate),
   });
 
+  // Get the first day of the month and create padding for the start of the grid
+  const firstDayOfMonth = startOfMonth(currentDate);
+  const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 for Sunday, 1 for Monday, etc.
+  const paddingDays = Array(firstDayOfWeek).fill(null);
+
   const fetchEvents = async (startDate: Date, endDate: Date) => {
     const accessToken = localStorage.getItem("googleAccessToken");
     if (!accessToken) {
@@ -101,6 +106,12 @@ export default function CalendarView({ onEventClick }: CalendarViewProps) {
       </div>
 
       <div className="grid grid-cols-7 gap-1">
+        {paddingDays.map((_, index) => (
+          <div
+            key={`padding-${index}`}
+            className="min-h-[100px] p-2 border border-gray-100 rounded-lg bg-gray-50"
+          />
+        ))}
         {days.map((day, dayIdx) => {
           const dayEvents = getEventsForDate(day);
           const isSelected = selectedDate && isSameDay(day, selectedDate);

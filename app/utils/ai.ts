@@ -143,21 +143,98 @@ export async function summarizeTranscriptChunk(text: string): Promise<string> {
     return "Failed to clean this segment.";
   }
 }
-
 export async function generateMeetingSummary(transcript: TranscriptSegment[]): Promise<string> {
   if (!genAI) return "AI unavailable.";
 
-  const prompt = `Please summarize this meeting transcript:\n${transcript.map(seg => seg.text).join('\n')}\n\nFocus on:\n1. Main topics discussed\n2. Key decisions made \n 3. Summary in bullet points`;
+  const formattedTranscript = transcript.map(seg => seg.text).join('\n');
+
+  const prompt = `
+Return ONLY a JSON object in the following format:
+{
+  "summary": "A detailed bullet-point summary of the meeting (10-12 points)",
+  "keyPoints": ["Main discussion topics as phrases"],
+  "decisions": ["Any decisions made during the meeting"]
+}
+
+The summary must cover all key updates, issues discussed, solutions proposed, deadlines mentioned, and responsibilities assigned.
+
+Do NOT include any explanation before or after the JSON object. Return valid JSON only.
+
+Transcript:
+${formattedTranscript}
+`.trim();
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.9,
+        topK: 40
+      }
+    });
+
     const result = await model.generateContent(prompt);
-    return (await result.response).text();
+    const rawText = (await result.response).text();
+    console.log("🧾 Raw Gemini Response (Structured):", rawText);
+
+    const cleanedJson = rawText
+      .replace(/```json|```/g, '')
+      .replace(/^[^{]+/, '')
+      .replace(/[^}]+$/, '')
+      .trim();
+
+    const parsed = JSON.parse(cleanedJson);
+
+    if (!parsed.summary || typeof parsed.summary !== "string") {
+      throw new Error("Missing or invalid summary field.");
+    }
+
+    const cleanSummary = parsed.summary
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/_(.*?)_/g, '$1')
+      .replace(/\r\n|\r/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    return cleanSummary;
   } catch (error) {
-    console.error('❌ Summary generation failed:', error);
-    return "Failed to generate summary.";
+    console.warn("❗ Structured summary failed:", error);
+
+    // Fallback summary
+    try {
+      const fallbackPrompt = `
+Provide a detailed bullet-point summary (10-12 points) of the following meeting transcript.
+Include key updates, bugs discussed, fixes proposed, deadlines, and decisions. Do not add any explanation.
+
+Transcript:
+${formattedTranscript}
+`.trim();
+
+      const fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const fallbackResult = await fallbackModel.generateContent(fallbackPrompt);
+      const fallbackText = (await fallbackResult.response).text().trim();
+
+      console.log("✅ Fallback summary:", fallbackText);
+
+      const finalClean = fallbackText
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/_(.*?)_/g, '$1')
+        .replace(/\r\n|\r/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      return finalClean || "Fallback summary generated, but was empty.";
+    } catch (fallbackErr) {
+      console.error("❌ Fallback summary generation also failed:", fallbackErr);
+      return "Failed to generate structured summary.";
+    }
   }
 }
+
 
 export async function chatWithAI({ transcript, question }: { transcript: TranscriptSegment[], question: string }): Promise<string> {
   if (!genAI) throw new Error('AI service unavailable.');
@@ -179,17 +256,39 @@ export async function chatWithAI({ transcript, question }: { transcript: Transcr
 export async function extractActionItems(transcript: TranscriptSegment[]): Promise<string[]> {
   if (!genAI) return ["AI unavailable."];
 
-  const prompt = `Extract all action items from this transcript:\n${transcript.map(t => t.text).join('\n')}\n\nFormat each like:\n- Who is responsible\n- What needs to be done\n- When it is due (if mentioned)`;
+  const prompt = `
+Extract all action items from this meeting transcript.
+Format each action item as a single bullet point like this:
+- [Task] by [Due Date]
+
+If no due date is mentioned, skip it.
+
+Respond with plain text — one bullet point per line. Do not include markdown formatting like **bold** or extra explanation.
+
+Transcript:
+${transcript.map(t => t.text).join('\n')}
+`.trim();
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
     const result = await model.generateContent(prompt);
-    return (await result.response).text().split('\n').filter(line => line.trim());
+    const rawText = (await result.response).text().trim();
+
+    // Clean output
+    const cleanItems = rawText
+      .replace(/\*\*(.*?)\*\*/g, '$1') // remove markdown bold
+      .replace(/\*(.*?)\*/g, '$1')     // remove markdown italic
+      .split('\n')
+      .map(line => line.replace(/^[-•]\s*/, '').trim())
+      .filter(line => line);
+
+    return cleanItems;
   } catch (error) {
     console.error('❌ Action item extraction failed:', error);
     return ["Failed to extract action items."];
   }
 }
+
 
 export async function generateMeetingInsights(transcript: TranscriptSegment[]): Promise<{
   sentiment: string;

@@ -1,4 +1,5 @@
 import type { CalendarEvent } from "~/types/meeting";
+import { format, parseISO, parse } from "date-fns";
 
 interface CalendarEventCardProps {
   event: CalendarEvent;
@@ -7,8 +8,43 @@ interface CalendarEventCardProps {
 
 export default function CalendarEventCard({ event, onClick }: CalendarEventCardProps) {
   const formatEventTime = (event: CalendarEvent) => {
-    const start = event.start?.dateTime || event.start?.date;
-    return start ? new Date(start).toLocaleString() : "";
+    try {
+      const start = event.start?.dateTime || event.start?.date;
+      const end = event.end?.dateTime || event.end?.date;
+      
+      if (!start) return "";
+      
+      // Check if the date is already formatted
+      if (typeof start === 'string' && start.includes('at')) {
+        // If it's already formatted, just return it
+        if (end && typeof end === 'string' && end.includes('at')) {
+          return `${start} - ${end}`;
+        }
+        return start;
+      }
+      
+      // Parse ISO string to Date object
+      const startDate = parseISO(start);
+      const endDate = end ? parseISO(end) : null;
+      
+      if (isNaN(startDate.getTime())) {
+        console.error("Invalid start date:", start);
+        return "Invalid date";
+      }
+      
+      if (endDate && isNaN(endDate.getTime())) {
+        console.error("Invalid end date:", end);
+        return format(startDate, "EEE, MMM d, yyyy h:mm a");
+      }
+      
+      const formattedStart = format(startDate, "EEE, MMM d, yyyy h:mm a");
+      const formattedEnd = endDate ? format(endDate, "h:mm a") : "";
+      
+      return formattedEnd ? `${formattedStart} - ${formattedEnd}` : formattedStart;
+    } catch (error) {
+      console.error("Error formatting event time:", error);
+      return "Invalid date format";
+    }
   };
 
   return (

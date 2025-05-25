@@ -32,23 +32,16 @@ export default function PastMeetings() {
         }
 
         setUserId(user.email);
-
-        // Fetch all meetings
         const allMeetings = await retrieveAllMeetings();
-
-        // Filter meetings on client side
         const now = new Date();
-        const filteredMeetings = allMeetings.filter((meeting) => {
-          // Filter by creator email
-          if (meeting.creator?.email !== user.email) return false;
 
-          // Filter out future meetings
+        const filteredMeetings = allMeetings.filter((meeting) => {
+          if (meeting.creator?.email !== user.email) return false;
           const meetingDate = meeting.start?.dateTime
             ? new Date(meeting.start.dateTime)
             : null;
           if (!meetingDate || meetingDate >= now) return false;
 
-          // Apply date filter
           if (dateFilter !== "all") {
             const startDate = new Date();
             switch (dateFilter) {
@@ -68,7 +61,6 @@ export default function PastMeetings() {
           return true;
         });
 
-        // Sort meetings by date (most recent first)
         filteredMeetings.sort((a, b) => {
           const dateA = a.start?.dateTime
             ? new Date(a.start.dateTime)
@@ -86,6 +78,7 @@ export default function PastMeetings() {
         setLoading(false);
       }
     }
+
     fetchMeetings();
   }, [dateFilter]);
 
@@ -137,7 +130,11 @@ export default function PastMeetings() {
             {filteredMeetings.map((meeting) => (
               <div
                 key={meeting.id}
-                className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow"
+                onClick={() => {
+                  setSelectedMeeting(meeting);
+                  setModalOpen(true);
+                }}
+                className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow cursor-pointer"
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -153,27 +150,17 @@ export default function PastMeetings() {
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2">
-                    {meeting.hangoutLink && (
-                      <a
-                        href={meeting.hangoutLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="bg-[#4B3576] text-white px-4 py-2 rounded-lg hover:bg-[#3a285c] transition"
-                      >
-                        Join Meeting
-                      </a>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedMeeting(meeting);
-                        setModalOpen(true);
-                      }}
+                  {meeting.hangoutLink && (
+                    <a
+                      href={meeting.hangoutLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       className="bg-[#4B3576] text-white px-4 py-2 rounded-lg hover:bg-[#3a285c] transition"
                     >
-                      View Details
-                    </button>
-                  </div>
+                      Join Meeting
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -186,7 +173,6 @@ export default function PastMeetings() {
         )}
       </div>
 
-      {/* Use MeetingModal component for details view */}
       {modalOpen && selectedMeeting && (
         <MeetingModal
           open={modalOpen}

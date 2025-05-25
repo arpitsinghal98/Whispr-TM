@@ -13,6 +13,7 @@ export default function MeetingSummary({
 }: MeetingSummaryProps) {
   return (
     <div className="space-y-6">
+      {/* Summary Section */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
         <h3 className="text-lg font-semibold text-[#4B3576] mb-3 flex items-center">
           <svg
@@ -30,9 +31,12 @@ export default function MeetingSummary({
           </svg>
           Summary
         </h3>
-        <p className="text-gray-700 leading-relaxed">{summary}</p>
+        <pre className="text-gray-700 whitespace-pre-wrap leading-relaxed">
+          {summary}
+        </pre>
       </div>
 
+      {/* Action Items Section */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
         <h3 className="text-lg font-semibold text-[#4B3576] mb-3 flex items-center">
           <svg
@@ -60,6 +64,7 @@ export default function MeetingSummary({
         </ul>
       </div>
 
+      {/* Insights Section */}
       {insights && (
         <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
           <h3 className="text-lg font-semibold text-[#4B3576] mb-3 flex items-center">
