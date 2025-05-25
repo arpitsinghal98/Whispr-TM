@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { CalendarEvent } from "~/types/meeting";
 import { fetchCalendarEvents } from "~/utils/api/calendar";
+import { saveMeetingToFirestore } from "~/utils/api/meetings";
 import { AuthError, CalendarError, isAppError } from "~/utils/errors";
 
 interface UseCalendarEventsReturn {

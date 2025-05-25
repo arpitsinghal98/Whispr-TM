@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '~/contexts/AuthContext';
-import { db } from '~/utils/firestoreClient';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { useState, useEffect } from "react";
+import { useAuth } from "~/contexts/AuthContext";
+import { db } from "~/utils/firestoreClient";
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
+import { format } from "date-fns";
 
 interface Meeting {
   id: string;
@@ -16,66 +16,75 @@ export default function PastMeetings() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    console.log('Auth state in PastMeetings:', { user, authLoading });
+    console.log("Auth state in PastMeetings:", { user, authLoading });
   }, [user, authLoading]);
 
   useEffect(() => {
     async function fetchMeetings() {
-      console.log('Fetching meetings, auth state:', { user, authLoading });
-      
+      console.log("Fetching meetings, auth state:", { user, authLoading });
+
       // Wait for auth to be ready
       if (authLoading) {
-        console.log('Auth still loading, waiting...');
+        console.log("Auth still loading, waiting...");
         return;
       }
 
       if (!user) {
-        console.log('No user found, stopping fetch');
+        console.log("No user found, stopping fetch");
         setLoading(false);
         return;
       }
 
       try {
-        console.log('Starting to fetch meetings for user:', user.uid);
+        console.log("Starting to fetch meetings for user:", user.uid);
         setLoading(true);
-        const meetingsRef = collection(db, 'meetings');
-        
-        // First try with the compound query
-        try {
-          const q = query(
-            meetingsRef,
-            where('userId', '==', user.uid),
-            orderBy('date', 'desc')
-          );
+        const meetingsRef = collection(db, "meetings");
 
-          const querySnapshot = await getDocs(q);
-          const meetingsData = querySnapshot.docs.map(doc => ({
+        // Query meetings for this user, ordered by date descending
+        const q = query(
+          meetingsRef,
+          where("userId", "==", user.uid),
+          orderBy("date", "desc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        const now = new Date();
+
+        // Only include meetings whose date is in the past
+        const meetingsData = querySnapshot.docs
+          .map((doc) => ({
             id: doc.id,
-            ...doc.data()
-          })) as Meeting[];
+            ...doc.data(),
+          }))
+          .filter((meeting: any) => {
+            // Ensure meeting.date exists and is in the past
+            if (!meeting.date) return false;
+            const meetingDate = new Date(meeting.date);
+            return meetingDate < now;
+          }) as Meeting[];
 
-          console.log('Fetched meetings:', meetingsData);
-          setMeetings(meetingsData);
-          setError(null);
-        } catch (queryError: any) {
-          // If the error is about missing index, show a specific message
-          if (queryError.code === 'failed-precondition' && queryError.message.includes('index')) {
-            setError('The database is being set up. Please try again in a few moments.');
-            console.log('Index is being created, will retry automatically');
-            
-            // Retry after 5 seconds
-            setTimeout(fetchMeetings, 5000);
-            return;
-          }
-          throw queryError; // Re-throw other errors
+        console.log("Fetched past meetings:", meetingsData);
+        setMeetings(meetingsData);
+        setError(null);
+      } catch (err: any) {
+        // If the error is about missing index, show a specific message
+        if (
+          err.code === "failed-precondition" &&
+          err.message.includes("index")
+        ) {
+          setError(
+            "The database is being set up. Please try again in a few moments."
+          );
+          console.log("Index is being created, will retry automatically");
+          setTimeout(fetchMeetings, 5000);
+          return;
         }
-      } catch (err) {
-        console.error('Error fetching meetings:', err);
-        setError('Failed to load meetings. Please try again.');
+        console.error("Error fetching meetings:", err);
+        setError("Failed to load meetings. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -84,9 +93,11 @@ export default function PastMeetings() {
     fetchMeetings();
   }, [user, authLoading]);
 
-  const filteredMeetings = meetings.filter(meeting =>
-    meeting.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (meeting.summary && meeting.summary.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredMeetings = meetings.filter(
+    (meeting) =>
+      meeting.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (meeting.summary &&
+        meeting.summary.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // Show loading state while auth is initializing
@@ -94,7 +105,9 @@ export default function PastMeetings() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">Past Meetings</h2>
+          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">
+            Past Meetings
+          </h2>
           <div className="animate-pulse">
             <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto mb-4"></div>
             <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
@@ -109,8 +122,12 @@ export default function PastMeetings() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">Past Meetings</h2>
-          <p className="text-gray-600">Please sign in to view your past meetings.</p>
+          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">
+            Past Meetings
+          </h2>
+          <p className="text-gray-600">
+            Please sign in to view your past meetings.
+          </p>
         </div>
       </div>
     );
@@ -121,7 +138,9 @@ export default function PastMeetings() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">Past Meetings</h2>
+          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">
+            Past Meetings
+          </h2>
           <div className="animate-pulse">
             <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto mb-4"></div>
             <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
@@ -136,10 +155,14 @@ export default function PastMeetings() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] p-8">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">Past Meetings</h2>
+          <h2 className="text-2xl font-bold text-[#4B3576] mb-4">
+            Past Meetings
+          </h2>
           <p className="text-red-500">{error}</p>
-          {error.includes('database is being set up') && (
-            <p className="text-gray-600 mt-2">This is normal for first-time setup. Please wait a moment...</p>
+          {error.includes("database is being set up") && (
+            <p className="text-gray-600 mt-2">
+              This is normal for first-time setup. Please wait a moment...
+            </p>
           )}
         </div>
       </div>
@@ -187,20 +210,26 @@ export default function PastMeetings() {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{meeting.title}</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {meeting.title}
+                  </h3>
                   <p className="text-sm text-gray-500">
-                    {format(new Date(meeting.date), 'MMMM d, yyyy h:mm a')}
+                    {format(new Date(meeting.date), "MMMM d, yyyy h:mm a")}
                   </p>
                 </div>
                 <button
-                  onClick={() => window.location.href = `/meeting/${meeting.id}`}
+                  onClick={() =>
+                    (window.location.href = `/meeting/${meeting.id}`)
+                  }
                   className="text-[#4B3576] hover:text-[#3a285c] font-medium"
                 >
                   View Details
                 </button>
               </div>
               {meeting.summary && (
-                <p className="mt-2 text-gray-600 line-clamp-2">{meeting.summary}</p>
+                <p className="mt-2 text-gray-600 line-clamp-2">
+                  {meeting.summary}
+                </p>
               )}
             </div>
           ))}
@@ -208,4 +237,4 @@ export default function PastMeetings() {
       )}
     </div>
   );
-} 
+}

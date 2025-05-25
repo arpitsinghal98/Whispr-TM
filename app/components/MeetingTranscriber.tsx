@@ -21,7 +21,9 @@ interface MeetingTranscriberProps {
   meetingDetails: MeetingDetails;
 }
 
-export default function MeetingTranscriber({ meetingDetails }: MeetingTranscriberProps) {
+export default function MeetingTranscriber({
+  meetingDetails,
+}: MeetingTranscriberProps) {
   const [meetingStarted, setMeetingStarted] = useState(false);
   const transcript = meetingDetails.transcript || "";
   const summary = meetingDetails.summary || "";
@@ -29,17 +31,20 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
   const [question, setQuestion] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const saveMeetingUpdate = useCallback(async (updates: Partial<MeetingDetails>) => {
-    try {
-      setIsSaving(true);
-      const meetingRef = doc(db, "meetings", meetingDetails.id);
-      await updateDoc(meetingRef, updates);
-    } catch (error) {
-      console.error("Error saving meeting update:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [meetingDetails.id]);
+  const saveMeetingUpdate = useCallback(
+    async (updates: Partial<MeetingDetails>) => {
+      try {
+        setIsSaving(true);
+        const meetingRef = doc(db, "meetings", meetingDetails.id);
+        await updateDoc(meetingRef, updates);
+      } catch (error) {
+        console.error("Error saving meeting update:", error);
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [meetingDetails.id]
+  );
 
   const handleStart = async () => {
     setMeetingStarted(true);
@@ -48,7 +53,7 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
 
   const handleJoinMeet = () => {
     if (meetingDetails.meetLink) {
-      window.open(meetingDetails.meetLink, '_blank');
+      window.open(meetingDetails.meetLink, "_blank");
     }
   };
 
@@ -57,18 +62,11 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
       const newChat = [...chat, `Q: ${question}`, "A: (AI answer placeholder)"];
       setChat(newChat);
       setQuestion("");
-      
+
       // Save chat history to Firestore
       await saveMeetingUpdate({ chat: newChat });
     }
   };
-
-  // Update transcript in Firestore when it changes
-  useEffect(() => {
-    if (transcript !== meetingDetails.transcript) {
-      saveMeetingUpdate({ transcript });
-    }
-  }, [transcript, meetingDetails.transcript, saveMeetingUpdate]);
 
   // Update summary in Firestore when it changes
   useEffect(() => {
@@ -89,7 +87,9 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
       {!meetingStarted ? (
         <div className="text-center">
           <h2 className="text-xl font-semibold text-[#4B3576] mb-4">
-            {meetingDetails.isOrganizer ? "Ready to start your meeting?" : "Meeting Details"}
+            {meetingDetails.isOrganizer
+              ? "Ready to start your meeting?"
+              : "Meeting Details"}
           </h2>
           <p className="text-gray-600 mb-6">
             {meetingDetails.description || "No description available"}
@@ -99,7 +99,7 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
               className="bg-[#4B3576] text-white px-6 py-3 rounded-xl font-semibold text-lg hover:bg-[#3a285c] transition"
               onClick={handleStart}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
+                if (e.key === "Enter" || e.key === " ") {
                   handleStart();
                 }
               }}
@@ -112,7 +112,7 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
               className="bg-[#4B3576] text-white px-6 py-3 rounded-xl font-semibold text-lg hover:bg-[#3a285c] transition"
               onClick={handleJoinMeet}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
+                if (e.key === "Enter" || e.key === " ") {
                   handleJoinMeet();
                 }
               }}
@@ -140,7 +140,9 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
             <h2 className="font-bold text-xl mb-2">Chat & Review</h2>
             <div className="space-y-2 mb-2">
               {chat.map((msg, i) => (
-                <div key={i} className="bg-gray-100 rounded p-2 text-sm">{msg}</div>
+                <div key={i} className="bg-gray-100 rounded p-2 text-sm">
+                  {msg}
+                </div>
               ))}
             </div>
             <div className="flex gap-2">
@@ -148,8 +150,8 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
                 className="flex-1 border rounded px-3 py-2"
                 placeholder="Ask a follow-up question..."
                 value={question}
-                onChange={e => setQuestion(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAsk()}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAsk()}
                 disabled={isSaving}
               />
               <button
@@ -165,4 +167,4 @@ export default function MeetingTranscriber({ meetingDetails }: MeetingTranscribe
       )}
     </div>
   );
-} 
+}

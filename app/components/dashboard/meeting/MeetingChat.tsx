@@ -1,6 +1,10 @@
-import { useState, ReactNode, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { chatWithAI } from "~/utils/ai";
-import { updateMeetingData } from "~/utils/api/meetings";
+import {
+  getTranscriptForMeeting,
+  getChatForMeeting,
+  saveChatToFirestore,
+} from "~/utils/api/meetings";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
@@ -10,18 +14,42 @@ interface ChatMessage {
   a: string;
 }
 
+interface TranscriptSegment {
+  text: string;
+  timestamp: string;
+}
+
 interface MeetingChatProps {
   eventId: string;
-  transcript: Array<{ text: string; timestamp: string }>;
-  chatHistory: ChatMessage[];
-  onChatUpdate: (newHistory: ChatMessage[]) => void;
   className?: string;
 }
 
-export default function MeetingChat({ eventId, transcript, chatHistory, onChatUpdate, className = "" }: MeetingChatProps) {
+export default function MeetingChat({
+  eventId,
+  className = "",
+}: MeetingChatProps) {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [transcript, setTranscript] = useState<TranscriptSegment[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [transcriptData, chatData] = await Promise.all([
+          getTranscriptForMeeting(eventId),
+          getChatForMeeting(eventId)
+        ]);
+        setTranscript(transcriptData || []);
+        setChatHistory(chatData || []);
+      } catch (err) {
+        console.error("Error loading data:", err);
+        setError("Failed to load meeting data.");
+      }
+    };
+    loadData();
+  }, [eventId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,10 +60,16 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
 
     try {
       const response = await chatWithAI({ transcript, question: chatInput });
-      onChatUpdate([...chatHistory, { q: chatInput, a: response }]);
+      const newChat = [...chatHistory, { q: chatInput, a: response }];
+      setChatHistory(newChat);
       setChatInput("");
+
+      // Save updated chat to Firestore
+      await saveChatToFirestore(eventId, newChat);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to send message');
+      setError(
+        error instanceof Error ? error.message : "Failed to send message"
+      );
     } finally {
       setChatLoading(false);
     }
@@ -43,29 +77,48 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
 
   const clearChat = useCallback(async () => {
     try {
-      // Clear local state
-      onChatUpdate([]);
-      // Update database
-      await updateMeetingData(eventId, { chat: [] });
+      setChatHistory([]);
+      await saveChatToFirestore(eventId, []);
     } catch (error) {
-      console.error('Error clearing chat:', error);
-      setError('Failed to clear chat history');
+      console.error("Error clearing chat:", error);
+      setError("Failed to clear chat history");
     }
-  }, [eventId, onChatUpdate]);
+  }, [eventId]);
 
   const components: Components = {
     p: ({ children }) => <p className="text-gray-700">{children}</p>,
-    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+    strong: ({ children }) => (
+      <strong className="font-semibold">{children}</strong>
+    ),
     em: ({ children }) => <em className="italic">{children}</em>,
     u: ({ children }) => <u className="underline">{children}</u>,
-    code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">{children}</code>,
-    pre: ({ children }) => <pre className="bg-gray-100 p-2 rounded-lg overflow-x-auto my-2">{children}</pre>,
+    code: ({ children }) => (
+      <code className="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">
+        {children}
+      </code>
+    ),
+    pre: ({ children }) => (
+      <pre className="bg-gray-100 p-2 rounded-lg overflow-x-auto my-2">
+        {children}
+      </pre>
+    ),
     ul: ({ children }) => <ul className="list-disc pl-4 my-2">{children}</ul>,
-    ol: ({ children }) => <ol className="list-decimal pl-4 my-2">{children}</ol>,
+    ol: ({ children }) => (
+      <ol className="list-decimal pl-4 my-2">{children}</ol>
+    ),
     li: ({ children }) => <li className="my-1">{children}</li>,
-    blockquote: ({ children }) => <blockquote className="border-l-4 border-[#4B3576] pl-4 my-2 italic">{children}</blockquote>,
+    blockquote: ({ children }) => (
+      <blockquote className="border-l-4 border-[#4B3576] pl-4 my-2 italic">
+        {children}
+      </blockquote>
+    ),
     a: ({ href, children }) => (
-      <a href={href} className="text-[#4B3576] hover:underline" target="_blank" rel="noopener noreferrer">
+      <a
+        href={href}
+        className="text-[#4B3576] hover:underline"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {children}
       </a>
     ),
@@ -73,10 +126,7 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
 
   const renderMessage = (text: string) => {
     return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={components}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {text}
       </ReactMarkdown>
     );
@@ -91,8 +141,18 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
             onClick={clearChat}
             className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors duration-200 flex items-center space-x-1"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
             </svg>
             <span>Clear</span>
           </button>
@@ -119,9 +179,7 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
               </div>
               <div className="bg-[#4B3576]/5 p-3 rounded-lg">
                 <p className="text-sm text-gray-500 mb-1">Answer:</p>
-                <div className="text-gray-700">
-                  {renderMessage(message.a)}
-                </div>
+                <div className="text-gray-700">{renderMessage(message.a)}</div>
               </div>
             </div>
           ))
@@ -147,4 +205,4 @@ export default function MeetingChat({ eventId, transcript, chatHistory, onChatUp
       </form>
     </div>
   );
-} 
+}

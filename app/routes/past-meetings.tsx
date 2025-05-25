@@ -1,44 +1,85 @@
 import Navbar from "~/components/Navbar";
 import { useState, useEffect } from "react";
-import {
-  db,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-} from "~/utils/firestoreClient";
-import { auth } from "~/utils/firebaseClient";
+import { retrieveAllMeetings } from "~/utils/api/meetings";
+import type { CalendarEvent } from "~/types/meeting";
+import MeetingModal from "~/components/dashboard/meeting/MeetingModal";
 
 export default function PastMeetings() {
-  const [meetings, setMeetings] = useState<any[]>([]);
+  const [meetings, setMeetings] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<CalendarEvent | null>(
+    null
+  );
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<
+    "all" | "week" | "month" | "year"
+  >("all");
+  const [userId, setUserId] = useState<string>("");
+
   useEffect(() => {
     async function fetchMeetings() {
       setLoading(true);
       setError(null);
       try {
         const user = JSON.parse(localStorage.getItem("user") as string) as any;
-        console.log("user -> ", user);
         if (!user) {
           setError("You must be logged in to view past meetings.");
           setMeetings([]);
           setLoading(false);
           return;
         }
-        const q = query(
-          collection(db, "meetings"),
-          where("userId", "==", user.uid),
-          orderBy("date", "desc")
-        );
-        const snapshot = await getDocs(q);
-        setMeetings(
-          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-        );
+
+        setUserId(user.email);
+
+        // Fetch all meetings
+        const allMeetings = await retrieveAllMeetings();
+
+        // Filter meetings on client side
+        const now = new Date();
+        const filteredMeetings = allMeetings.filter((meeting) => {
+          // Filter by creator email
+          if (meeting.creator?.email !== user.email) return false;
+
+          // Filter out future meetings
+          const meetingDate = meeting.start?.dateTime
+            ? new Date(meeting.start.dateTime)
+            : null;
+          if (!meetingDate || meetingDate >= now) return false;
+
+          // Apply date filter
+          if (dateFilter !== "all") {
+            const startDate = new Date();
+            switch (dateFilter) {
+              case "week":
+                startDate.setDate(now.getDate() - 7);
+                break;
+              case "month":
+                startDate.setMonth(now.getMonth() - 1);
+                break;
+              case "year":
+                startDate.setFullYear(now.getFullYear() - 1);
+                break;
+            }
+            if (meetingDate < startDate) return false;
+          }
+
+          return true;
+        });
+
+        // Sort meetings by date (most recent first)
+        filteredMeetings.sort((a, b) => {
+          const dateA = a.start?.dateTime
+            ? new Date(a.start.dateTime)
+            : new Date(0);
+          const dateB = b.start?.dateTime
+            ? new Date(b.start.dateTime)
+            : new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setMeetings(filteredMeetings);
       } catch (e: any) {
         setError(e.message || "Failed to load past meetings.");
       } finally {
@@ -46,16 +87,17 @@ export default function PastMeetings() {
       }
     }
     fetchMeetings();
-  }, []);
+  }, [dateFilter]);
 
   const filteredMeetings = meetings.filter(
     (meeting) =>
-      meeting.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      meeting.summary?.toLowerCase().includes(searchQuery.toLowerCase())
+      meeting.summary?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      meeting.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  function formatDate(date: string) {
-    return new Date(date).toLocaleString();
+  function formatDate(dateString?: string) {
+    if (!dateString) return "No date";
+    return new Date(dateString).toLocaleString();
   }
 
   return (
@@ -66,14 +108,24 @@ export default function PastMeetings() {
           Past Meetings
         </h1>
 
-        <div className="mb-6">
+        <div className="flex gap-4 mb-6">
           <input
             type="text"
             placeholder="Search past meetings..."
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B3576]"
+            className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B3576]"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
+          <select
+            className="px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4B3576]"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
+          >
+            <option value="all">All Time</option>
+            <option value="week">Last Week</option>
+            <option value="month">Last Month</option>
+            <option value="year">Last Year</option>
+          </select>
         </div>
 
         {loading ? (
@@ -90,24 +142,38 @@ export default function PastMeetings() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-xl font-semibold text-[#4B3576] mb-2">
-                      {meeting.title || "Untitled Meeting"}
+                      {meeting.summary || "Untitled Meeting"}
                     </h3>
                     <p className="text-gray-600 mb-2">
-                      {formatDate(meeting.date)}
+                      {formatDate(meeting.start?.dateTime)}
                     </p>
-                    {meeting.summary && (
-                      <p className="text-gray-700 mb-4">{meeting.summary}</p>
+                    {meeting.description && (
+                      <p className="text-gray-700 mb-4">
+                        {meeting.description}
+                      </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => {
-                      setSelectedMeeting(meeting);
-                      setModalOpen(true);
-                    }}
-                    className="bg-[#4B3576] text-white px-4 py-2 rounded-lg hover:bg-[#3a285c] transition"
-                  >
-                    View Details
-                  </button>
+                  <div className="flex gap-2">
+                    {meeting.hangoutLink && (
+                      <a
+                        href={meeting.hangoutLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-[#4B3576] text-white px-4 py-2 rounded-lg hover:bg-[#3a285c] transition"
+                      >
+                        Join Meeting
+                      </a>
+                    )}
+                    <button
+                      onClick={() => {
+                        setSelectedMeeting(meeting);
+                        setModalOpen(true);
+                      }}
+                      className="bg-[#4B3576] text-white px-4 py-2 rounded-lg hover:bg-[#3a285c] transition"
+                    >
+                      View Details
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -120,59 +186,15 @@ export default function PastMeetings() {
         )}
       </div>
 
-      {/* Meeting Details Modal */}
+      {/* Use MeetingModal component for details view */}
       {modalOpen && selectedMeeting && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative">
-            <button
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-              onClick={() => setModalOpen(false)}
-            >
-              ✕
-            </button>
-            <h2 className="text-2xl font-bold text-[#4B3576] mb-4">
-              {selectedMeeting.title || "Untitled Meeting"}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {formatDate(selectedMeeting.date)}
-            </p>
-
-            <div className="space-y-6">
-              {selectedMeeting.transcript && (
-                <div>
-                  <h3 className="text-lg font-semibold text-[#4B3576] mb-2">
-                    Transcript
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 text-gray-700 whitespace-pre-wrap">
-                    {selectedMeeting.transcript}
-                  </div>
-                </div>
-              )}
-
-              {selectedMeeting.notes && (
-                <div>
-                  <h3 className="text-lg font-semibold text-[#4B3576] mb-2">
-                    Notes
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 text-gray-700">
-                    {selectedMeeting.notes}
-                  </div>
-                </div>
-              )}
-
-              {selectedMeeting.summary && (
-                <div>
-                  <h3 className="text-lg font-semibold text-[#4B3576] mb-2">
-                    Summary
-                  </h3>
-                  <div className="bg-gray-50 rounded-lg p-4 text-gray-700">
-                    {selectedMeeting.summary}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <MeetingModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          event={selectedMeeting}
+          userId={userId}
+          showRecordingButton={false}
+        />
       )}
     </div>
   );

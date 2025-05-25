@@ -36,6 +36,7 @@ export default function Navbar() {
         {user ? (
           <div className="flex items-center gap-6">
             <a href="/dashboard" className="hover:underline">Dashboard</a>
+            <a href="/calendar-view" className="hover:underline">Calendar</a>
             <a href="/past-meetings" className="hover:underline">Past Meetings</a>
             <span>{user.displayName || user.email}</span>
             <button

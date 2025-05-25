@@ -5,6 +5,10 @@ export interface CalendarEvent {
     dateTime?: string;
     date?: string;
   };
+  end?: {
+    dateTime?: string;
+    date?: string;
+  };
   description?: string;
   attendees?: Array<{
     email: string;
@@ -25,7 +29,7 @@ export interface CalendarEvent {
 export interface MeetingData {
   id: string;
   userId: string;
-  status: 'invited' | 'active' | 'completed';
+  status: "invited" | "active" | "completed";
   createdAt: string;
   transcript: Array<{
     text: string;
@@ -49,4 +53,4 @@ export interface MeetingInsights {
   sentiment: string;
   keyTopics: string[];
   decisions: string[];
-} 
+}

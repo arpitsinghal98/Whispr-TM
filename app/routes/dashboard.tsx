@@ -9,13 +9,12 @@ import PendingInvitations from "~/components/dashboard/invitations/PendingInvita
 import { useMeetingModal } from "~/hooks/useMeetingModal";
 import ErrorBoundary from "~/components/ErrorBoundary";
 
-export const meta: MetaFunction = () => [
-  { title: "Dashboard | Whispr" },
-];
+export const meta: MetaFunction = () => [{ title: "Dashboard | Whispr" }];
 
 export default function Dashboard() {
   const [userId, setUserId] = useState<string | null>(null);
-  const { selectedEvent, isModalOpen, openModal, closeModal } = useMeetingModal();
+  const { selectedEvent, isModalOpen, openModal, closeModal } =
+    useMeetingModal();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -32,7 +31,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-      
+
       <main className="container mx-auto px-4 py-8">
         <ErrorBoundary>
           {userId && <PendingInvitations userId={userId} />}
@@ -46,12 +45,14 @@ export default function Dashboard() {
 
       <ErrorBoundary>
         <MeetingModal
+          key={selectedEvent?.id}
           open={isModalOpen}
           onClose={closeModal}
           event={selectedEvent}
           userId={userId || ""}
+          showRecordingButton={true}
         />
       </ErrorBoundary>
     </div>
   );
-} 
+}

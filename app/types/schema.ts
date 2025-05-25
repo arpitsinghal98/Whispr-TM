@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from "firebase/firestore";
 
 // User Schema
 export interface User {
@@ -31,7 +31,7 @@ export interface Meeting {
 // Transcript Schema
 export interface TranscriptSegment {
   text: string;
-  timestamp: Timestamp;
+  timestamp: string;
 }
 
 export interface Transcript {
@@ -43,7 +43,7 @@ export interface Transcript {
 }
 
 // Chat Schema
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = "user" | "assistant";
 
 export interface ChatMessage {
   role: MessageRole;
@@ -59,32 +59,33 @@ export interface Chat {
   updatedAt: Timestamp;
 }
 
+export interface Insights {
+  sentiment: string;
+  keyTopics: string[];
+  decisions: string[];
+}
+
 // Summary Schema
 export interface Summary {
   id: string;
-  meetingId: string;
-  content: {
-    mainSummary: string;
-    actionItems: string[];
-    keyInsights: string[];
-  };
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  summary: string;
+  actionItems: string[];
+  insights: Insights;
 }
 
 // Collection Names
 export const COLLECTIONS = {
-  USERS: 'users',
-  MEETINGS: 'meetings',
-  TRANSCRIPTS: 'transcripts',
-  CHATS: 'chats',
-  SUMMARIES: 'summaries',
+  USERS: "users",
+  MEETINGS: "meetings",
+  TRANSCRIPTS: "transcripts",
+  CHATS: "chats",
+  SUMMARIES: "summaries",
 } as const;
 
 // Helper function to create a new document with timestamps
-export function createDocument<T extends { createdAt?: Timestamp; updatedAt?: Timestamp }>(
-  data: Omit<T, 'createdAt' | 'updatedAt'>
-): T {
+export function createDocument<
+  T extends { createdAt?: Timestamp; updatedAt?: Timestamp }
+>(data: Omit<T, "createdAt" | "updatedAt">): T {
   const now = Timestamp.now();
   return {
     ...data,
@@ -95,10 +96,10 @@ export function createDocument<T extends { createdAt?: Timestamp; updatedAt?: Ti
 
 // Helper function to update a document with updatedAt timestamp
 export function updateDocument<T extends { updatedAt?: Timestamp }>(
-  data: Partial<Omit<T, 'updatedAt'>>
+  data: Partial<Omit<T, "updatedAt">>
 ): Partial<T> {
   return {
     ...data,
     updatedAt: Timestamp.now(),
   } as Partial<T>;
-} 
+}

@@ -1,5 +1,7 @@
 // ai.ts
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Summary } from "~/types/schema";
+import { saveSummaryToFirestore, getSummaryForMeeting } from "./api/meetings";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -19,6 +21,54 @@ interface TranscriptSegment {
   text: string;
   timestamp: string;
   speaker?: string;
+}
+
+export async function generateSummaryWithInsights(
+  transcript: TranscriptSegment[],
+  meetingId?: string
+) {
+  if (!genAI) {
+    console.error("⚠️ AI features are disabled.");
+    return;
+  }
+
+  try {
+    // Check if we already have a valid summary
+    if (meetingId) {
+      const existingSummary = await getSummaryForMeeting(meetingId);
+      if (existingSummary) {
+        console.log("Valid summary already exists, skipping generation");
+        return;
+      }
+    }
+
+    // Only generate if we have transcript content
+    if (!transcript.length) {
+      console.log("No transcript content available for summary generation");
+      return;
+    }
+
+    const newSummary = await generateMeetingSummary(transcript);
+    const items = await extractActionItems(transcript);
+    const meetingInsights = await generateMeetingInsights(transcript);
+    console.log("meetingInsights -> ", meetingInsights);
+    console.log("items -> ", items);
+    console.log("newSummary -> ", newSummary);
+
+    if (meetingId) {
+      let summary: Summary = {
+        summary: newSummary,
+        actionItems: items,
+        insights: meetingInsights,
+        id: `${meetingId}-${new Date().toISOString()}`,
+      };
+      console.log("summary -> ", summary);
+      await saveSummaryToFirestore(meetingId, summary);
+    }
+  } catch (error) {
+    console.error("Error generating insights:", error);
+    throw error;
+  }
 }
 
 export async function transcribeAudio(audioBase64: string): Promise<string> {
@@ -97,7 +147,7 @@ export async function summarizeTranscriptChunk(text: string): Promise<string> {
 export async function generateMeetingSummary(transcript: TranscriptSegment[]): Promise<string> {
   if (!genAI) return "AI unavailable.";
 
-  const prompt = `Please summarize this meeting transcript:\n${transcript.map(seg => seg.text).join('\n')}\n\nFocus on:\n1. Main topics discussed\n2. Key decisions made\n3. Action items\n4. Summary in bullet points`;
+  const prompt = `Please summarize this meeting transcript:\n${transcript.map(seg => seg.text).join('\n')}\n\nFocus on:\n1. Main topics discussed\n2. Key decisions made \n 3. Summary in bullet points`;
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
